@@ -3,11 +3,15 @@
 import axios from "axios";
 import * as z from "zod";
 import { Heading } from "@/components/heading";
-import { ImageIcon } from "lucide-react";
+import { Download, ImageIcon } from "lucide-react";
 import { zodResolver } from "@hookform/resolvers/zod";
 
 import { useForm } from "react-hook-form";
-import { formSchema } from "./constants";
+import { 
+    amountOptions, 
+    formSchema, 
+    resolutionOptions 
+} from "./constants";
 import { 
     Form, 
     FormControl, 
@@ -18,21 +22,31 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ChatCompletionRequestMessage } from "openai";
 import { Empty } from "@/components/empty";
 import { Loader } from "@/components/loader";
-import { cn } from "@/lib/utils";
-import { UserAvatar } from "@/components/user-avatar";
-import { BotAvatar } from "@/components/bot-avatar";
+
+import { 
+    Select, 
+    SelectContent, 
+    SelectItem, 
+    SelectTrigger, 
+    SelectValue 
+} from "@/components/ui/select";
+import { Card, CardFooter } from "@/components/ui/card";
+import Image from "next/image";
 
 const ImagePage = () => {
     const router = useRouter();
-    const [messages, setMessages] = useState<ChatCompletionRequestMessage[]> ([]);
+    const [ images, setImages ] = useState<string[]>([]);
 
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
         defaultValues: {
             prompt: "",
+            resolution: "512X512",
+
+            // Should be default amount of images to generate
+            image: "1",
         }
     });
 
@@ -40,18 +54,12 @@ const ImagePage = () => {
 
     const onSubmit = async (values: z.infer<typeof formSchema>) => {
         try {
-            const userMessage : ChatCompletionRequestMessage = {
-                role: "user",
-                content: values.prompt,
-            };
-            const newMessages = [...messages, userMessage];
+            setImages([]);
+            const response = await axios.post("/api/image", values);
 
-            const response = await axios.post("/api/conversation", {
-                messages: newMessages,
-            });
+            const urls = response.data.map((image: { url: string }) => image.url);
 
-            setMessages((current ) => [...current, userMessage, response.data]);
-            form.reset();
+            setImages(urls);
 
         } catch (error: any) {
             // TODO: Open Pro Model
@@ -90,55 +98,135 @@ const ImagePage = () => {
                             >
                             <FormField
                                 name="prompt"
-                                render={({ field }) =>
-                                <FormItem className="col-span-12 lg:col-span-10">
+                                render={({ field }) => (
+                                <FormItem className="col-span-12 lg:col-span-6">
                                     <FormControl className="m-0 p-0">
                                         <Input 
                                             className="border-0 outline-none
                                             focus-visible:ring-0
                                             focus-visible:ring-transparent"
                                             disabled={isLoading}
-                                            placeholder="Find the radius of Mars"
+                                            placeholder="A picture of a horse in Swiss alps"
                                             {...field}
                                         />
                                     </FormControl>
                                 </FormItem>
-                            }
+                            )}
                             />
-                            <Button className="col-span-12 lg:col-span-2 w-full
-                            "disabled={isLoading}>
+                            <FormField
+                                control={form.control}
+                                // this reflects the above name comment pointed our
+                                name="image"
+                                render={({ field }) => (
+                                    <FormItem className="col-span-12 lg:col-span-2">
+                                        <Select 
+                                         disabled={isLoading}
+                                         onValueChange={field.onChange}
+                                         value={field.value}
+                                         defaultValue={field.value}
+                                         >
+                                            <FormControl>
+                                                <SelectTrigger>
+                                                    <SelectValue defaultValue={field.value}/>
+                                                </SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent>
+                                                {amountOptions.map((option) => (
+                                                    <SelectItem
+                                                        key={option.value}
+                                                        value={option.value}
+                                                    >
+                                                        {option.label}
+                                                    </SelectItem>
+                                                )
+                                                )}
+                                            </SelectContent>
+                                        </Select>
+                                    </FormItem>
+                                )
+                                }
+                            />
+
+                            <FormField
+                                control={form.control}
+                                name="resolution"
+                                render={({ field }) => (
+                                    <FormItem className="col-span-12 lg:col-span-2">
+                                        <Select 
+                                         disabled={isLoading}
+                                         onValueChange={field.onChange}
+                                         value={field.value}
+                                         defaultValue={field.value}
+                                         >
+                                            <FormControl>
+                                                <SelectTrigger>
+                                                    <SelectValue defaultValue={field.value}/>
+                                                </SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent>
+                                                {resolutionOptions.map((option) => (
+                                                    <SelectItem
+                                                        key={option.value}
+                                                        value={option.value}
+                                                    >
+                                                        {option.label}
+                                                    </SelectItem>
+                                                )
+                                                )}
+                                            </SelectContent>
+                                        </Select>
+                                    </FormItem>
+                                )
+                                }
+                            />
+
+
+                            <Button className="col-span-12 lg:col-span-2 w-full" type="submit"
+                            disabled={isLoading} size="icon">
                                 Generate
                             </Button>
                         </form>
                     </Form>
-                </div>
-                <div className="space-y-4 mt-4">
+                
                     {isLoading && (
-                        <div className="p-8 rounded-lg w-full flex items-center 
-                            justify-center bg-muted">
+                        <div className="p-20">
                                 <Loader />
                         </div>
                     )}
-                    {messages.length === 0 && !isLoading && (
+                    {images.length === 0 && !isLoading && (
                         <Empty 
-                            label="No conversation yet."
+                            label="No images generated."
                         />
                     )}
-                  <div className="flex flex-col-reverse gap-y-4">
-                    {messages.map((message) => (
-                        <div key={message.content}
-                            className={cn(
-                                "p-8 rounded-lg w-full flex gap-x-8 items-start",
-                                message.role === "user" ? "bg-white border border-black/10" : "bg-muted"
-                                )}
-                        >
-                            {message.role === "user" ? <UserAvatar /> :  <BotAvatar />}
-                            <p className="text-sm">
-                                {message.content}
-                            </p>
-                        </div>
-                    ))}
-                  </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3
+                        xl:grid-cols-4 gap-4 mt-8">
+                        {images.map((src) => (
+                            <Card 
+                             key={src}
+                             className="rounded-lg overflow-hidden"
+                             >
+                                <div className="relative aspect-square">
+                                    <Image 
+                                     alt="Generated"
+                                     fill
+                                     src={src}
+                                    />
+                                </div>
+                                <CardFooter className="p-2">
+                                    <Button
+                                        onClick={() => window.open(src)}
+                                        variant="secondary" 
+                                        className="w-full"
+                                        >
+                                        
+                                        <Download className="h-4 w-4 mr-2"/>
+                                        Download
+                                    </Button>
+                                </CardFooter>
+                            </Card>
+                        ))}
+                    </div>
+                  
                 </div>
             </div>
         </div>
